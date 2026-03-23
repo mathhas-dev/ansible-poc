@@ -40,18 +40,15 @@ ansible-poc/
 │       └── host_vars/               # Per-server overrides (e.g. healthcheck URL)
 │           ├── app-server-01.yml
 │           └── app-server-02.yml
-├── playbooks/
+├── playbooks/                       # What Ansible does and on which hosts
 │   ├── setup.yml                    # First-time server provisioning
 │   ├── deploy.yml                   # Image update on all servers
-│   ├── site.yml                     # Legacy: full stack deploy
 │   └── ping.yml                     # Connectivity check
-├── roles/
-│   ├── common/                      # Base packages, timezone
+├── roles/                           # Reusable units of tasks grouped by responsibility
 │   ├── docker/                      # Install Docker CE + GHCR login
 │   ├── dart-collector/              # Deploy compose file + create cron
 │   ├── dart-deploy/                 # docker pull + compose down/up + verify cron
-│   ├── webserver/                   # Nginx (legacy)
-│   └── database/                   # PostgreSQL (legacy)
+│   └── common/                      # Base packages, timezone (PoC example)
 └── .github/workflows/
     └── deploy.yml                   # Build image → push GHCR → Ansible deploy
 ```
