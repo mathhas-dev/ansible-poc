@@ -13,6 +13,8 @@
       - htop
       - git
       - ufw
+      - tzdata
+      - cron
     state: present
   become: yes
 
