@@ -5,16 +5,17 @@ ANSIBLE      := docker compose run --rm ansible-control
 SSH_CONTROL  := docker compose run --rm -it ansible-control ssh \
                   -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no
 
-.PHONY: help setup up down restart ping ping-prod \
+.PHONY: help setup up down restart \
+        ping ping-prod \
         setup-local setup-prod deploy deploy-prod \
-        check check-prod shell \
-        ssh-server-01 ssh-server-02 ssh-db1 clean
+        check check-prod \
+        shell ssh-server-01 ssh-server-02 clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-# ─── Local environment setup ──────────────────────────────────────────────────
+# ─── Setup ────────────────────────────────────────────────────────────────────
 
 setup: ## Generate SSH keys and build all Docker images
 	docker run --rm \
@@ -31,7 +32,7 @@ setup: ## Generate SSH keys and build all Docker images
 # ─── Docker lifecycle ─────────────────────────────────────────────────────────
 
 up: ## Start managed node containers
-	docker compose up -d app-server-01 app-server-02 db1
+	docker compose up -d app-server-01 app-server-02
 	docker compose run --rm ansible-control \
 		bash -c "sleep 3 && echo '==> Containers ready.'"
 	docker compose ps
@@ -88,9 +89,6 @@ ssh-server-01: ## SSH into app-server-01 (via control container)
 
 ssh-server-02: ## SSH into app-server-02 (via control container)
 	$(SSH_CONTROL) ansible@app-server-02
-
-ssh-db1: ## SSH into db1 (via control container)
-	$(SSH_CONTROL) ansible@db1
 
 # ─── Cleanup ──────────────────────────────────────────────────────────────────
 

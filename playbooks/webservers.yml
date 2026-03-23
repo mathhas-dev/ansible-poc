@@ -1,8 +1,0 @@
----
-- name: Configure web servers
-  hosts: webservers
-  gather_facts: yes
-
-  roles:
-    - common
-    - webserver

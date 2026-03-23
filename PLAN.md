@@ -4,7 +4,8 @@
 
 On-premise servers (app-server-N) run a DART data acquisition script for renewable energy plants.
 Each server runs the same Docker image on a cron every 10 minutes (collect and exit).
-Ansible is the deployment orchestrator. GitHub Actions is the CI/CD control node (no dedicated on-premise Ansible host).
+Ansible is the deployment orchestrator. GitHub Actions is the CI/CD control node.
+Everything runs inside Docker containers — the host only needs Docker Desktop.
 
 ## Responsibilities
 
@@ -26,49 +27,35 @@ git push → main
     │
     ▼
 [deploy]  ansible-playbook deploy.yml  (SSH → all app-servers in parallel)
-              ├── docker pull ghcr.io/org/dart:latest   ← fetches new image from GHCR
+              ├── docker pull ghcr.io/org/dart:latest
               ├── docker compose down
-              └── docker compose up                      ← runs with newly pulled image
+              └── docker compose up
 ```
 
 Cron on each server continues independently every 10 min using whatever image is already local.
 
-## First-time server setup
+## Local testing
 
-```
-# 1. Add server to inventories/production/hosts.ini
-# 2. Add host_vars/app-server-N.yml with healthcheck URL
-# 3. Run:
-make setup-prod   # or workflow_dispatch → setup
-```
+Everything runs inside Docker containers via the Makefile:
 
-## Project structure changes
+- `ansible-control`: Ansible control node (Python + Ansible + SSH client)
+- `app-server-01`, `app-server-02`: Simulated managed nodes (Ubuntu + SSH server)
 
-```
-roles/
-├── docker/           NEW — install Docker CE + docker compose plugin + GHCR login
-├── dart-collector/   NEW — deploy compose file, create cron, verify cron health
-└── dart-deploy/      NEW — docker pull + compose down/up
+Docker-related tasks (install, pull, compose) are guarded with `when: env != 'local'` because
+managed node containers don't run Docker inside them. All other tasks (dirs, templates, cron) run identically.
 
-playbooks/
-├── setup.yml         NEW — first-time server provisioning (docker + dart-collector)
-└── deploy.yml        NEW — image update on all servers (dart-deploy)
+## Adding a new production server
 
-inventories/production/
-├── hosts.ini              UPDATE — add [app_servers] group
-├── group_vars/all.yml     UPDATE — add GHCR image vars
-└── host_vars/             NEW — per-server vars (healthcheck URL, etc.)
+1. Add to `inventories/production/hosts.ini`
+2. Create `inventories/production/host_vars/<hostname>.yml` with healthcheck URL
+3. Run `make setup-prod` or trigger GitHub Actions workflow with `setup` playbook
 
-.github/workflows/
-└── deploy.yml             UPDATE — add build job before Ansible deploy job
-```
-
-## GitHub Actions secrets required
+## GitHub Actions secrets
 
 | Secret | Used for |
 |---|---|
 | `PROD_SSH_PRIVATE_KEY` | SSH access to app-servers |
 | `SSH_USER` | Remote user on app-servers |
-| `GHCR_TOKEN` | Push image (Actions) + pull image (servers via Ansible) |
-| `GHCR_USER` | GHCR username |
-| `HEALTHCHECK_URL` | Default ping URL (overridable per host in host_vars) |
+| `GHCR_USER` | GHCR authentication (push + pull) |
+| `GHCR_TOKEN` | GHCR authentication (push + pull) |
+| `HEALTHCHECK_URL` | Default ping URL |

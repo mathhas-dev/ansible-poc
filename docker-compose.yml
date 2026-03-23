@@ -20,8 +20,6 @@ services:
       dockerfile: Dockerfile.ssh-host
     container_name: ansible-app-server-01
     hostname: app-server-01
-    ports:
-      - "2221:22"
     volumes:
       - ./ssh_keys/id_rsa.pub:/tmp/authorized_keys_src:ro
     networks:
@@ -33,21 +31,6 @@ services:
       dockerfile: Dockerfile.ssh-host
     container_name: ansible-app-server-02
     hostname: app-server-02
-    ports:
-      - "2222:22"
-    volumes:
-      - ./ssh_keys/id_rsa.pub:/tmp/authorized_keys_src:ro
-    networks:
-      - ansible-net
-
-  db1:
-    build:
-      context: .
-      dockerfile: Dockerfile.ssh-host
-    container_name: ansible-db1
-    hostname: db1
-    ports:
-      - "2223:22"
     volumes:
       - ./ssh_keys/id_rsa.pub:/tmp/authorized_keys_src:ro
     networks:

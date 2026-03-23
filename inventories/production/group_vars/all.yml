@@ -4,10 +4,11 @@ env: production
 app_name: dart
 dart_dir: /opt/dart
 
-# GHCR image — injected at runtime via GitHub Actions secrets
+# Injected at runtime via GitHub Actions env vars
 ghcr_user: "{{ lookup('env', 'GHCR_USER') }}"
 ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
+ghcr_org: "{{ lookup('env', 'GHCR_ORG') }}"
 dart_image: "ghcr.io/{{ ghcr_org }}/dart:latest"
 
-# Override in host_vars per server if plants have individual healthcheck URLs
+# Override per server in host_vars/<hostname>.yml
 healthcheck_url: "{{ lookup('env', 'HEALTHCHECK_URL') }}"

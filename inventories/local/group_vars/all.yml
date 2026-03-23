@@ -3,10 +3,6 @@ env: local
 
 app_name: dart
 dart_dir: /opt/dart
-
-ghcr_user: "{{ lookup('env', 'GHCR_USER') }}"
-ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
-ghcr_org: your-org
-dart_image: "ghcr.io/{{ ghcr_org }}/dart:latest"
+dart_image: "ghcr.io/your-org/dart:latest"
 
 healthcheck_url: "https://hc-ping.com/local-test-uuid"
