@@ -6,10 +6,6 @@ services:
     container_name: ansible-control
     volumes:
       - .:/ansible
-      - ./ssh_keys/id_rsa:/root/.ssh/id_rsa:ro
-    depends_on:
-      - app-server-01
-      - app-server-02
     networks:
       - ansible-net
     working_dir: /ansible
@@ -21,7 +17,7 @@ services:
     container_name: ansible-app-server-01
     hostname: app-server-01
     volumes:
-      - ./ssh_keys/id_rsa.pub:/tmp/authorized_keys_src:ro
+      - ./ssh_keys:/tmp/ssh_keys:ro
     networks:
       - ansible-net
 
@@ -32,7 +28,7 @@ services:
     container_name: ansible-app-server-02
     hostname: app-server-02
     volumes:
-      - ./ssh_keys/id_rsa.pub:/tmp/authorized_keys_src:ro
+      - ./ssh_keys:/tmp/ssh_keys:ro
     networks:
       - ansible-net
 

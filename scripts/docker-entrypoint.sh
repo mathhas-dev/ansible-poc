@@ -1,11 +1,11 @@
 #!/bin/bash
-# Fix authorized_keys permissions after Docker bind mount.
-# On Windows Docker Desktop, mounted files lose correct ownership/mode,
-# which causes sshd to reject the key.
+# Copy SSH public key from mounted directory and fix permissions.
+# The directory mount avoids Docker creating an empty file/dir when keys
+# don't exist yet (e.g. before init runs).
 set -e
 
-if [ -f /tmp/authorized_keys_src ]; then
-  cp /tmp/authorized_keys_src /home/ansible/.ssh/authorized_keys
+if [ -f /tmp/ssh_keys/id_rsa.pub ]; then
+  cp /tmp/ssh_keys/id_rsa.pub /home/ansible/.ssh/authorized_keys
   chmod 600 /home/ansible/.ssh/authorized_keys
   chown ansible:ansible /home/ansible/.ssh/authorized_keys
 fi

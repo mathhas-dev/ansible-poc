@@ -6,8 +6,6 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install --no-cache-dir ansible
 
-# Install Ansible collections at build time so they are baked into the image.
-# If requirements.yml changes, rebuild with: docker compose build ansible-control
 COPY requirements.yml /tmp/requirements.yml
 RUN ansible-galaxy collection install -r /tmp/requirements.yml
 
@@ -17,4 +15,4 @@ RUN chmod +x /control-entrypoint.sh
 WORKDIR /ansible
 
 ENTRYPOINT ["/control-entrypoint.sh"]
-CMD ["bash"]
+CMD ["help"]

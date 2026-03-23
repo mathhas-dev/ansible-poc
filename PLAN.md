@@ -32,23 +32,24 @@ git push → main
               └── docker compose up
 ```
 
-Cron on each server continues independently every 10 min using whatever image is already local.
-
 ## Local testing
 
-Everything runs inside Docker containers via the Makefile:
+The `ansible-control` container is a task runner. All commands are:
+```
+docker compose run --rm ansible-control <command>
+```
 
-- `ansible-control`: Ansible control node (Python + Ansible + SSH client)
-- `app-server-01`, `app-server-02`: Simulated managed nodes (Ubuntu + SSH server)
+Commands: `init`, `ping`, `check`, `setup-local`, `deploy`, `shell`, `ssh-server-*`,
+and production variants: `ping-prod`, `check-prod`, `setup-prod`, `deploy-prod`.
 
 Docker-related tasks (install, pull, compose) are guarded with `when: env != 'local'` because
-managed node containers don't run Docker inside them. All other tasks (dirs, templates, cron) run identically.
+managed node containers don't run Docker inside them. All other tasks run identically.
 
 ## Adding a new production server
 
 1. Add to `inventories/production/hosts.ini`
 2. Create `inventories/production/host_vars/<hostname>.yml` with healthcheck URL
-3. Run `make setup-prod` or trigger GitHub Actions workflow with `setup` playbook
+3. Run `docker compose run --rm ansible-control setup-prod -e "ansible_user=deploy"`
 
 ## GitHub Actions secrets
 

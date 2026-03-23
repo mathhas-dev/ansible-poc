@@ -1,8 +1,7 @@
 # Ansible PoC — DART Deployment Orchestration
 
 Ansible-based orchestration for deploying the DART data acquisition script to on-premise servers.
-Everything runs inside Docker containers — the only requirement on the host machine is **Docker Desktop** and **make**.
-No bash, no Python, no SSH client, no Ansible installation needed on the host.
+Everything runs inside Docker containers. The only requirement on the host is **Docker Desktop**.
 
 ## Architecture
 
@@ -15,7 +14,7 @@ git push → main
 [build]   docker build → push ghcr.io/org/dart:latest
     │
     ▼
-[deploy]  ansible-playbook deploy.yml  (SSH → all app-servers in parallel)
+[deploy]  ansible-playbook deploy.yml  (SSH → all app-servers)
               ├── docker pull ghcr.io/org/dart:latest
               ├── docker compose down
               └── docker compose up
@@ -24,11 +23,11 @@ Each server — cron every 10 min:
     docker compose up → collect data → exit → ping Healthcheck.io
 ```
 
-### Local environment (Docker only)
+### Local environment
 
 ```
   host machine (any OS — only needs Docker Desktop)
-  └── make <command>
+  └── docker compose run --rm ansible-control <command>
           │
           ▼
 ┌───────────────────────────────────────────────────────┐
@@ -39,8 +38,8 @@ Each server — cron every 10 min:
 │  │  (Ansible + SSH)  │──SSH:22──► app-server-02       │
 │  └──────────────────┘                                 │
 │                                                       │
-│  All commands run inside ansible-control.             │
-│  Nothing executes directly on the host.               │
+│  Ansible, SSH, and all tasks run inside containers.   │
+│  Only the docker CLI runs on the host.                │
 └───────────────────────────────────────────────────────┘
 ```
 
@@ -53,7 +52,6 @@ ansible-poc/
 ├── docker-compose.yml               # ansible-control + app-server-01 + app-server-02
 ├── ansible.cfg                      # Ansible config (defaults to local inventory)
 ├── requirements.yml                 # Ansible collection dependencies (community.docker)
-├── Makefile                         # All commands — runs everything via Docker
 ├── inventories/
 │   ├── local/                       # Docker containers (used for testing)
 │   │   ├── hosts.ini
@@ -78,14 +76,25 @@ ansible-poc/
 ## Quick start
 
 > **Do not run `docker compose up` directly.** SSH keys must be generated first.
-> Always start with `make setup`.
 
 ```bash
-make setup        # generate SSH keys + build all Docker images
-make up           # start managed node containers
-make ping         # test SSH connectivity
-make setup-local  # provision containers (create dirs, compose file, cron)
-make deploy       # simulate deploy (verify cron is intact)
+# 1. Build all images
+docker compose build
+
+# 2. Generate SSH keys (run once)
+docker compose run --rm ansible-control init
+
+# 3. Start managed node containers
+docker compose up -d app-server-01 app-server-02
+
+# 4. Test SSH connectivity
+docker compose run --rm ansible-control ping
+
+# 5. Provision containers (create dirs, compose file, cron)
+docker compose run --rm ansible-control setup-local
+
+# 6. Simulate a deploy (verify cron is intact)
+docker compose run --rm ansible-control deploy
 ```
 
 ## Local development flow
@@ -96,16 +105,19 @@ make deploy       # simulate deploy (verify cron is intact)
 clone repo
     │
     ▼
-make setup          # generate SSH keys + build Docker images
+docker compose build                                   # build images
     │
     ▼
-make up             # start app-server-01 and app-server-02
+docker compose run --rm ansible-control init           # generate SSH keys
     │
     ▼
-make ping           # validate SSH connectivity — must pass before anything else
+docker compose up -d app-server-01 app-server-02       # start managed nodes
     │
     ▼
-make setup-local    # provision: create dirs, deploy compose file, create cron
+docker compose run --rm ansible-control ping           # validate connectivity
+    │
+    ▼
+docker compose run --rm ansible-control setup-local    # provision
 ```
 
 ### Development cycle (repeat for every change)
@@ -114,20 +126,20 @@ make setup-local    # provision: create dirs, deploy compose file, create cron
 edit playbooks / roles / templates
     │
     ▼
-make check          # dry-run — shows what would change, applies nothing
+docker compose run --rm ansible-control check          # dry-run
     │
     ├── looks wrong? ──► fix and repeat
     │
     ▼
-make setup-local    # apply changes (idempotent — safe to re-run)
+docker compose run --rm ansible-control setup-local    # apply changes
     or
-make deploy         # test deploy flow (cron verification)
+docker compose run --rm ansible-control deploy         # test deploy flow
     │
     ├── something failed?
     │       │
     │       ▼
-    │   make shell  # bash inside ansible-control for debugging
-    │   make ping   # re-check connectivity
+    │   docker compose run --rm ansible-control shell   # debug
+    │   docker compose run --rm ansible-control ping    # re-check connectivity
     │       │
     │       └──► fix and repeat
     │
@@ -138,16 +150,19 @@ commit and push     # triggers GitHub Actions → build → deploy to production
 ### Cleanup
 
 ```bash
-make down    # stop containers (keep SSH keys and images for next session)
-make clean   # stop containers + delete SSH keys (full reset)
+docker compose down                                    # stop containers
+
+# Full reset (remove SSH keys — will need init again):
+docker compose down
+docker run --rm -v "./ssh_keys:/ssh_keys" alpine sh -c "rm -rf /ssh_keys/*"
 ```
 
 ### Rebuilding after changes to Dockerfile or requirements.yml
 
 ```bash
-make down
-make setup   # rebuilds all images
-make up
+docker compose down
+docker compose build
+docker compose up -d app-server-01 app-server-02
 ```
 
 ## What is tested locally vs production
@@ -180,7 +195,7 @@ Docker-related tasks are guarded with `when: env != 'local'` because managed nod
 
 3. Run first-time provisioning:
    ```bash
-   make setup-prod
+   docker compose run --rm ansible-control setup-prod -e "ansible_user=deploy"
    ```
 
 ## CI/CD — GitHub Actions
@@ -216,27 +231,31 @@ push → main
 
 ### Security
 
-- SSH key and vault password exist on the runner only during the deploy step and are deleted in a cleanup that always runs, even on failure.
-- No secrets are stored in the repository. All are injected at runtime via environment variables and Ansible `-e` flags.
+- SSH key exists on the runner only during the deploy step and is deleted in a cleanup that always runs.
+- No secrets are stored in the repository. All are injected at runtime via environment variables.
 
-## All make targets
+## All commands
 
-| Target | Description |
+```bash
+docker compose run --rm ansible-control help
+```
+
+| Command | Description |
 |---|---|
-| `make help` | List all available targets |
-| `make setup` | Generate SSH keys + build Docker images |
-| `make up` | Start managed node containers |
-| `make down` | Stop and remove all containers |
-| `make restart` | Restart all containers |
-| `make ping` | Test SSH connectivity (local) |
-| `make ping-prod` | Test SSH connectivity (production) |
-| `make setup-local` | First-time provisioning (local) |
-| `make setup-prod` | First-time provisioning (production) |
-| `make deploy` | Simulate deploy (local) |
-| `make deploy-prod` | Deploy to production |
-| `make check` | Dry-run (local) |
-| `make check-prod` | Dry-run (production) |
-| `make shell` | Bash inside ansible-control |
-| `make ssh-server-01` | SSH into app-server-01 |
-| `make ssh-server-02` | SSH into app-server-02 |
-| `make clean` | Remove containers + SSH keys |
+| `init` | Generate SSH keys (run once before anything else) |
+| `ping` | Test SSH connectivity (local) |
+| `check` | Dry-run setup (local) |
+| `setup-local` | Provision containers (local) |
+| `deploy` | Simulate deploy (local) |
+| `ping-prod` | Test SSH connectivity (production) |
+| `check-prod` | Dry-run setup (production) |
+| `setup-prod` | Provision servers (production) |
+| `deploy-prod` | Deploy to production |
+| `shell` | Bash inside control node |
+| `ssh-server-01` | SSH into app-server-01 |
+| `ssh-server-02` | SSH into app-server-02 |
+
+Production commands accept extra Ansible flags:
+```bash
+docker compose run --rm ansible-control setup-prod -e "ansible_user=deploy" -e "ghcr_org=myorg"
+```
