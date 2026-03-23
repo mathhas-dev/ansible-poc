@@ -1,0 +1,30 @@
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    openssh-server \
+    python3 \
+    sudo \
+    curl \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir /var/run/sshd
+
+# Create ansible user
+RUN useradd -m -s /bin/bash ansible && \
+    echo 'ansible:ansible' | chpasswd && \
+    usermod -aG sudo ansible && \
+    echo 'ansible ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Configure SSH
+RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+
+# Copy SSH public key (will be mounted or added during build)
+RUN mkdir -p /home/ansible/.ssh && \
+    chmod 700 /home/ansible/.ssh && \
+    chown ansible:ansible /home/ansible/.ssh
+
+EXPOSE 22
+
+CMD ["/usr/sbin/sshd", "-D"]

@@ -1,0 +1,8 @@
+---
+- name: Configure database servers
+  hosts: dbservers
+  gather_facts: yes
+
+  roles:
+    - common
+    - database

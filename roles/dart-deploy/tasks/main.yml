@@ -1,0 +1,35 @@
+---
+- name: Pull latest DART image from GHCR
+  docker_image:
+    name: "{{ dart_image }}"
+    source: pull
+    force_source: yes
+  become: yes
+  register: pull_result
+
+- name: Stop running containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ dart_dir }}"
+    state: absent
+  become: yes
+  when: pull_result.changed
+
+- name: Start containers with new image
+  community.docker.docker_compose_v2:
+    project_src: "{{ dart_dir }}"
+    state: present
+    pull: never
+  become: yes
+  when: pull_result.changed
+
+- name: Verify cron job still exists
+  command: crontab -l -u {{ ansible_user }}
+  register: crontab_output
+  changed_when: false
+  become: yes
+
+- name: Assert cron job is intact
+  assert:
+    that: "'dart-collector' in crontab_output.stdout"
+    fail_msg: "dart-collector cron job is missing — run setup.yml to restore"
+    success_msg: "dart-collector cron job is intact"

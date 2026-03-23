@@ -1,0 +1,11 @@
+---
+# First-time provisioning for a new app-server.
+# Installs Docker, authenticates to GHCR, deploys compose file and cron.
+- name: Provision app servers
+  hosts: app_servers
+  gather_facts: yes
+
+  roles:
+    - common
+    - docker
+    - dart-collector

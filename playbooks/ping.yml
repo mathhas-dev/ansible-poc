@@ -1,0 +1,13 @@
+---
+# Quick connectivity check — run this first to validate SSH access
+- name: Ping all hosts
+  hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: Ping
+      ping:
+
+    - name: Show host info
+      debug:
+        msg: "Connected to {{ inventory_hostname }} ({{ ansible_host | default(inventory_hostname) }}:{{ ansible_port | default(22) }}) as {{ ansible_user }}"

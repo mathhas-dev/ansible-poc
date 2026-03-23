@@ -1,0 +1,99 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      playbook:
+        description: "Ansible playbook to run"
+        required: true
+        default: deploy
+        type: choice
+        options:
+          - deploy
+          - setup
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/dart
+
+jobs:
+  # ─── Build Docker image and push to GHCR ─────────────────────────────────────
+  build:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ─── Deploy via Ansible to all app-servers ───────────────────────────────────
+  deploy:
+    name: Ansible deploy
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Write SSH private key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/prod_id_rsa
+          chmod 600 ~/.ssh/prod_id_rsa
+
+      - name: Add production hosts to known_hosts
+        run: |
+          for host in $(grep -E '^app-server' inventories/production/hosts.ini | awk '{print $2}' | cut -d= -f2); do
+            ssh-keyscan -H "$host" >> ~/.ssh/known_hosts
+          done
+
+      - name: Run Ansible playbook
+        env:
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+        run: |
+          PLAYBOOK="${{ github.event.inputs.playbook || 'deploy' }}"
+          ansible-playbook -i inventories/production/hosts.ini \
+            playbooks/${PLAYBOOK}.yml \
+            --private-key ~/.ssh/prod_id_rsa \
+            -e "ansible_user=${{ secrets.SSH_USER }}" \
+            -e "ghcr_org=${{ github.repository_owner }}"
+
+      - name: Clean up secrets from runner
+        if: always()
+        run: rm -f ~/.ssh/prod_id_rsa

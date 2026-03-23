@@ -1,0 +1,3 @@
+---
+# Plant-specific overrides for app-server-02
+# healthcheck_url: https://hc-ping.com/your-uuid-here

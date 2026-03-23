@@ -1,0 +1,54 @@
+---
+- name: Create DART working directory
+  file:
+    path: "{{ dart_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    mode: "0755"
+  become: yes
+
+- name: Create DART logs directory
+  file:
+    path: "{{ dart_dir }}/logs"
+    state: directory
+    owner: "{{ ansible_user }}"
+    mode: "0755"
+  become: yes
+
+- name: Deploy docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ dart_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    mode: "0644"
+  become: yes
+
+- name: Pull initial DART image
+  docker_image:
+    name: "{{ dart_image }}"
+    source: pull
+    force_source: yes
+  become: yes
+
+- name: Install cron job
+  cron:
+    name: dart-collector
+    minute: "*/10"
+    job: >-
+      cd {{ dart_dir }} &&
+      docker compose up >> {{ dart_dir }}/logs/cron.log 2>&1 &&
+      curl -fsS --retry 3 --max-time 10 {{ healthcheck_url }} > /dev/null
+    user: "{{ ansible_user }}"
+    state: present
+
+- name: Verify cron job is registered
+  command: crontab -l -u {{ ansible_user }}
+  register: crontab_output
+  changed_when: false
+  become: yes
+
+- name: Assert cron job exists
+  assert:
+    that: "'dart-collector' in crontab_output.stdout"
+    fail_msg: "dart-collector cron job was not found in crontab"
+    success_msg: "dart-collector cron job is registered"

@@ -1,0 +1,9 @@
+---
+# Triggered automatically after a new image is pushed to GHCR.
+# Pulls the latest image and restarts the compose stack on all app-servers.
+- name: Deploy latest DART image
+  hosts: app_servers
+  gather_facts: no
+
+  roles:
+    - dart-deploy

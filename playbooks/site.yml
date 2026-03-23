@@ -1,0 +1,4 @@
+---
+# Main playbook — applies all roles to all hosts
+- import_playbook: webservers.yml
+- import_playbook: dbservers.yml

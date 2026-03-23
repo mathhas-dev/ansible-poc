@@ -1,0 +1,46 @@
+services:
+  web1:
+    build:
+      context: .
+      dockerfile: Dockerfile.ssh-host
+    container_name: ansible-web1
+    hostname: web1
+    ports:
+      - "2221:22"
+      - "8081:80"
+    volumes:
+      - ./ssh_keys/id_rsa.pub:/home/ansible/.ssh/authorized_keys:ro
+    networks:
+      - ansible-net
+
+  web2:
+    build:
+      context: .
+      dockerfile: Dockerfile.ssh-host
+    container_name: ansible-web2
+    hostname: web2
+    ports:
+      - "2222:22"
+      - "8082:80"
+    volumes:
+      - ./ssh_keys/id_rsa.pub:/home/ansible/.ssh/authorized_keys:ro
+    networks:
+      - ansible-net
+
+  db1:
+    build:
+      context: .
+      dockerfile: Dockerfile.ssh-host
+    container_name: ansible-db1
+    hostname: db1
+    ports:
+      - "2223:22"
+      - "5432:5432"
+    volumes:
+      - ./ssh_keys/id_rsa.pub:/home/ansible/.ssh/authorized_keys:ro
+    networks:
+      - ansible-net
+
+networks:
+  ansible-net:
+    driver: bridge

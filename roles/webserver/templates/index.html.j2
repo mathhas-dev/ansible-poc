@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ app_name }} - {{ inventory_hostname }}</title>
+    <style>
+        body { font-family: sans-serif; padding: 2em; background: #f0f0f0; }
+        .box { background: white; padding: 2em; border-radius: 8px; max-width: 500px; margin: auto; }
+        .env-{{ env }} { border-left: 5px solid {% if env == 'local' %}#4CAF50{% else %}#f44336{% endif %}; }
+    </style>
+</head>
+<body>
+    <div class="box env-{{ env }}">
+        <h1>{{ app_name }}</h1>
+        <p><strong>Host:</strong> {{ inventory_hostname }}</p>
+        <p><strong>Environment:</strong> {{ env }}</p>
+        <p><strong>Deployed by Ansible</strong></p>
+    </div>
+</body>
+</html>

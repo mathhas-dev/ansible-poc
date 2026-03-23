@@ -1,0 +1,13 @@
+services:
+  dart:
+    image: {{ dart_image }}
+    restart: "no"
+    environment:
+      - ENV={{ env }}
+    volumes:
+      - {{ dart_dir }}/logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
