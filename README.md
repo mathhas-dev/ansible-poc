@@ -1,7 +1,7 @@
 # Ansible PoC — DART Deployment Orchestration
 
 Ansible-based orchestration for deploying the DART data acquisition script to on-premise servers.
-Docker containers are used locally to validate playbooks before touching production.
+Everything runs in Docker — the only requirement on the host machine is **Docker Desktop**.
 
 ## Architecture
 
@@ -21,17 +21,35 @@ Each server — cron every 10 min:
     docker compose up → collect data → exit → ping Healthcheck.io
 ```
 
+### Local environment (Docker only)
+
+```
+┌─────────────────────────────────────────────┐
+│              Docker network                 │
+│                                             │
+│  ┌─────────────────┐                        │
+│  │  ansible-control │──SSH──► app-server-01 │
+│  │  (Ansible + SSH) │──SSH──► app-server-02 │
+│  └─────────────────┘                        │
+└─────────────────────────────────────────────┘
+         ▲
+    make ping / make deploy / ...
+    (runs docker compose run --rm ansible-control)
+```
+
 ## Project structure
 
 ```
 ansible-poc/
-├── Dockerfile.ssh-host              # Base Ubuntu image with SSH (local testing)
-├── docker-compose.yml               # Local containers: app-server-01, app-server-02, db1
+├── Dockerfile.control               # Ansible control node image
+├── Dockerfile.ssh-host              # Managed node image (Ubuntu + SSH)
+├── docker-compose.yml               # All containers: control + app-server-01/02 + db1
 ├── ansible.cfg                      # Global Ansible config
 ├── Makefile                         # Shortcut commands
+├── requirements.yml                 # Ansible collections (community.docker)
 ├── PLAN.md                          # Architecture decisions and design plan
 ├── inventories/
-│   ├── local/                       # Docker inventory (localhost:222x)
+│   ├── local/                       # Docker inventory (container hostnames)
 │   │   ├── hosts.ini
 │   │   └── group_vars/all.yml
 │   └── production/                  # On-premise production servers
@@ -53,24 +71,42 @@ ansible-poc/
     └── deploy.yml                   # Build image → push GHCR → Ansible deploy
 ```
 
-## Quick start (local)
+## Quick start
 
 ```bash
-# 1. Generate SSH keys and build Docker images
+# 1. Generate SSH keys and build all Docker images
 make setup
 
-# 2. Start containers
+# 2. Start managed node containers
 make up
 
-# 3. Test SSH connectivity
+# 3. Test SSH connectivity (runs Ansible inside the control container)
 make ping
 
-# 4. First-time provisioning (installs Docker, cron, compose file)
+# 4. First-time provisioning (cron, compose file — skips Docker install locally)
 make setup-local
 
-# 5. Simulate a deploy (pull latest image + restart)
+# 5. Simulate a deploy (cron verification — skips Docker pull locally)
 make deploy
+
+# 6. Open a shell in the control node for debugging
+make shell
 ```
+
+## What is tested locally vs production
+
+| Task | Local (Docker) | Production |
+|---|---|---|
+| SSH connectivity | yes | yes |
+| Directory creation | yes | yes |
+| Template deployment | yes | yes |
+| Cron creation and verification | yes | yes |
+| Docker installation | skipped | yes |
+| GHCR login | skipped | yes |
+| `docker pull` | skipped | yes |
+| `docker compose` restart | skipped | yes |
+
+Docker-related tasks are skipped locally because managed node containers don't run Docker inside them. They validate everything else identically.
 
 ## Adding a new server
 

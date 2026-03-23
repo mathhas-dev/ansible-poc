@@ -9,18 +9,21 @@
     state: present
     update_cache: yes
   become: yes
+  when: env != 'local'
 
 - name: Add Docker GPG key
   apt_key:
     url: https://download.docker.com/linux/ubuntu/gpg
     state: present
   become: yes
+  when: env != 'local'
 
 - name: Add Docker apt repository
   apt_repository:
     repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
     state: present
   become: yes
+  when: env != 'local'
 
 - name: Install Docker CE and Compose plugin
   apt:
@@ -32,6 +35,7 @@
     state: present
     update_cache: yes
   become: yes
+  when: env != 'local'
 
 - name: Ensure Docker service is started and enabled
   service:
@@ -39,6 +43,7 @@
     state: started
     enabled: yes
   become: yes
+  when: env != 'local'
 
 - name: Add deploy user to docker group
   user:
@@ -46,10 +51,19 @@
     groups: docker
     append: yes
   become: yes
+  when: env != 'local'
+
+- name: Install Python Docker SDK (required by community.docker modules)
+  pip:
+    name: docker
+    executable: pip3
+  become: yes
+  when: env != 'local'
 
 - name: Authenticate to GHCR
-  docker_login:
+  community.docker.docker_login:
     registry: ghcr.io
     username: "{{ ghcr_user }}"
     password: "{{ ghcr_token }}"
   become: yes
+  when: env != 'local'

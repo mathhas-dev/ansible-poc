@@ -1,12 +1,12 @@
-SHELL := /bin/bash
-LOCAL_INV  := inventories/local/hosts.ini
-PROD_INV   := inventories/production/hosts.ini
-PLAYBOOKS  := playbooks
+SHELL        := /bin/bash
+LOCAL_INV    := inventories/local/hosts.ini
+PROD_INV     := inventories/production/hosts.ini
+PLAYBOOKS    := playbooks
+ANSIBLE      := docker compose run --rm ansible-control
 
 .PHONY: help setup up down restart ping ping-prod \
         setup-local setup-prod deploy deploy-prod \
-        check check-prod \
-        ssh-server-01 ssh-server-02 ssh-db1 clean
+        check check-prod shell clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -14,79 +14,79 @@ help: ## Show this help
 
 # ─── Local environment setup ──────────────────────────────────────────────────
 
-setup: ## Generate SSH keys and build Docker images (local)
+setup: ## Generate SSH keys and build all Docker images
 	@echo "==> Generating SSH keys..."
-	@bash scripts/setup-ssh-keys.sh
+	@mkdir -p ssh_keys
+	@docker run --rm \
+		-v "$(CURDIR)/ssh_keys:/ssh_keys" \
+		ubuntu:22.04 bash -c \
+		"apt-get install -qq -y openssh-client > /dev/null 2>&1 && \
+		 if [ ! -f /ssh_keys/id_rsa ]; then \
+		   ssh-keygen -t rsa -b 4096 -f /ssh_keys/id_rsa -N '' -C 'ansible-poc-local'; \
+		 else \
+		   echo 'SSH keys already exist — skipping.'; \
+		 fi"
 	@echo "==> Building Docker images..."
 	docker compose build
 
 # ─── Docker lifecycle ─────────────────────────────────────────────────────────
 
-up: ## Start local Docker containers
-	docker compose up -d
+up: ## Start managed node containers
+	docker compose up -d app-server-01 app-server-02 db1
 	@echo "==> Waiting for SSH to be ready..."
 	@sleep 3
 	@docker compose ps
 
-down: ## Stop and remove local containers
+down: ## Stop and remove all containers
 	docker compose down
 
-restart: down up ## Restart local containers
+restart: down up ## Restart all containers
 
 # ─── Connectivity ─────────────────────────────────────────────────────────────
 
 ping: ## Ping all local (Docker) app-servers
-	ansible-playbook -i $(LOCAL_INV) $(PLAYBOOKS)/ping.yml
+	$(ANSIBLE) ansible-playbook -i $(LOCAL_INV) $(PLAYBOOKS)/ping.yml
 
 ping-prod: ## Ping all production app-servers
-	ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/ping.yml
+	$(ANSIBLE) ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/ping.yml
 
 # ─── First-time provisioning ──────────────────────────────────────────────────
 
-setup-local: ## Provision local Docker containers (install Docker, cron, compose)
-	ansible-playbook -i $(LOCAL_INV) $(PLAYBOOKS)/setup.yml
+setup-local: ## Provision local Docker containers (cron, compose file — skips Docker install)
+	$(ANSIBLE) ansible-playbook -i $(LOCAL_INV) $(PLAYBOOKS)/setup.yml
 
 setup-prod: ## Provision production servers for the first time
-	ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/setup.yml \
-		--private-key ~/.ssh/prod_id_rsa \
+	$(ANSIBLE) ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/setup.yml \
 		-e "ansible_user=$$SSH_USER" \
 		-e "ghcr_org=$$GHCR_ORG"
 
 # ─── Deploy (image update) ────────────────────────────────────────────────────
 
-deploy: ## Pull latest image and restart on local Docker containers
-	ansible-playbook -i $(LOCAL_INV) $(PLAYBOOKS)/deploy.yml
+deploy: ## Simulate deploy locally (cron check — skips Docker pull)
+	$(ANSIBLE) ansible-playbook -i $(LOCAL_INV) $(PLAYBOOKS)/deploy.yml
 
 deploy-prod: ## Pull latest image and restart on production servers
-	ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/deploy.yml \
-		--private-key ~/.ssh/prod_id_rsa \
+	$(ANSIBLE) ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/deploy.yml \
 		-e "ansible_user=$$SSH_USER" \
 		-e "ghcr_org=$$GHCR_ORG"
 
 # ─── Dry-run / check mode ─────────────────────────────────────────────────────
 
 check: ## Dry-run setup against local environment
-	ansible-playbook -i $(LOCAL_INV) $(PLAYBOOKS)/setup.yml --check --diff
+	$(ANSIBLE) ansible-playbook -i $(LOCAL_INV) $(PLAYBOOKS)/setup.yml --check --diff
 
 check-prod: ## Dry-run setup against production
-	ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/setup.yml --check --diff \
-		--private-key ~/.ssh/prod_id_rsa \
+	$(ANSIBLE) ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/setup.yml --check --diff \
 		-e "ansible_user=$$SSH_USER"
 
-# ─── SSH shortcuts ────────────────────────────────────────────────────────────
+# ─── Shell access ─────────────────────────────────────────────────────────────
 
-ssh-server-01: ## SSH into app-server-01 container
-	ssh -i ssh_keys/id_rsa -p 2221 -o StrictHostKeyChecking=no ansible@localhost
-
-ssh-server-02: ## SSH into app-server-02 container
-	ssh -i ssh_keys/id_rsa -p 2222 -o StrictHostKeyChecking=no ansible@localhost
-
-ssh-db1: ## SSH into db1 container
-	ssh -i ssh_keys/id_rsa -p 2223 -o StrictHostKeyChecking=no ansible@localhost
+shell: ## Open a shell inside the Ansible control node
+	$(ANSIBLE) bash
 
 # ─── Cleanup ──────────────────────────────────────────────────────────────────
 
-clean: down ## Remove containers and generated SSH keys
+clean: down ## Remove all containers and generated SSH keys
 	@echo "==> Removing SSH keys..."
 	rm -rf ssh_keys/
 	@echo "==> Done."

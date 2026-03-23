@@ -24,11 +24,12 @@
   become: yes
 
 - name: Pull initial DART image
-  docker_image:
+  community.docker.docker_image:
     name: "{{ dart_image }}"
     source: pull
     force_source: yes
   become: yes
+  when: env != 'local'
 
 - name: Install cron job
   cron:

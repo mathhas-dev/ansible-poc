@@ -3,6 +3,7 @@ FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y \
     openssh-server \
     python3 \
+    python3-pip \
     sudo \
     curl \
     vim \
@@ -20,11 +21,14 @@ RUN useradd -m -s /bin/bash ansible && \
 RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
     sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
 
-# Copy SSH public key (will be mounted or added during build)
 RUN mkdir -p /home/ansible/.ssh && \
     chmod 700 /home/ansible/.ssh && \
     chown ansible:ansible /home/ansible/.ssh
 
+# Entrypoint fixes authorized_keys permissions after Docker bind mount on Windows
+COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 EXPOSE 22
 
-CMD ["/usr/sbin/sshd", "-D"]
+CMD ["/docker-entrypoint.sh"]

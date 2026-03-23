@@ -1,18 +1,19 @@
 ---
 - name: Pull latest DART image from GHCR
-  docker_image:
+  community.docker.docker_image:
     name: "{{ dart_image }}"
     source: pull
     force_source: yes
   become: yes
   register: pull_result
+  when: env != 'local'
 
 - name: Stop running containers
   community.docker.docker_compose_v2:
     project_src: "{{ dart_dir }}"
     state: absent
   become: yes
-  when: pull_result.changed
+  when: env != 'local' and pull_result.changed
 
 - name: Start containers with new image
   community.docker.docker_compose_v2:
@@ -20,7 +21,7 @@
     state: present
     pull: never
   become: yes
-  when: pull_result.changed
+  when: env != 'local' and pull_result.changed
 
 - name: Verify cron job still exists
   command: crontab -l -u {{ ansible_user }}
