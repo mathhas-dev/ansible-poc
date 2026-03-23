@@ -73,8 +73,11 @@ ansible-poc/
 
 ## Quick start
 
+> **Do not run `docker compose up` directly.** The containers depend on SSH keys
+> that must be generated first. Always start with `make setup`.
+
 ```bash
-# 1. Generate SSH keys and build all Docker images
+# 1. Generate SSH keys and build all Docker images (required before anything else)
 make setup
 
 # 2. Start managed node containers
@@ -91,6 +94,68 @@ make deploy
 
 # 6. Open a shell in the control node for debugging
 make shell
+```
+
+## Local development flow
+
+### First time (one-off)
+
+```
+clone repo
+    │
+    ▼
+make setup          # generate SSH keys + build all Docker images
+    │
+    ▼
+make up             # start app-server-01, app-server-02, db1
+    │
+    ▼
+make ping           # validate SSH connectivity — must pass before anything else
+    │
+    ▼
+make setup-local    # run setup.yml: create dirs, deploy compose file, create cron
+```
+
+### Development cycle (repeat for every change)
+
+```
+edit playbooks / roles / templates
+    │
+    ▼
+make check          # dry-run — shows what would change without applying anything
+    │
+    ├── looks wrong? ──► fix and repeat
+    │
+    ▼
+make setup-local    # apply setup changes (idempotent — safe to re-run)
+    or
+make deploy         # apply deploy changes (cron verification)
+    │
+    ├── something failed?
+    │       │
+    │       ▼
+    │   make shell  # open bash inside ansible-control for manual debugging
+    │   make ping   # re-check connectivity
+    │       │
+    │       └──► fix and repeat from top
+    │
+    ▼
+commit and push     # triggers GitHub Actions → build → deploy to production
+```
+
+### Cleanup
+
+```bash
+make down    # stop containers, keep SSH keys and images
+make clean   # stop containers + delete SSH keys (full reset)
+```
+
+### Rebuilding after changes to Dockerfile or requirements.yml
+
+```bash
+make down
+docker compose build   # rebuild images
+make up
 ```
 
 ## What is tested locally vs production
