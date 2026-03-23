@@ -1,12 +1,14 @@
-SHELL        := /bin/bash
 LOCAL_INV    := inventories/local/hosts.ini
 PROD_INV     := inventories/production/hosts.ini
 PLAYBOOKS    := playbooks
 ANSIBLE      := docker compose run --rm ansible-control
+SSH_CONTROL  := docker compose run --rm -it ansible-control ssh \
+                  -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no
 
 .PHONY: help setup up down restart ping ping-prod \
         setup-local setup-prod deploy deploy-prod \
-        check check-prod shell clean
+        check check-prod shell \
+        ssh-server-01 ssh-server-02 ssh-db1 clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -15,9 +17,7 @@ help: ## Show this help
 # ─── Local environment setup ──────────────────────────────────────────────────
 
 setup: ## Generate SSH keys and build all Docker images
-	@echo "==> Generating SSH keys..."
-	@mkdir -p ssh_keys
-	@docker run --rm \
+	docker run --rm \
 		-v "$(CURDIR)/ssh_keys:/ssh_keys" \
 		ubuntu:22.04 bash -c \
 		"apt-get install -qq -y openssh-client > /dev/null 2>&1 && \
@@ -26,16 +26,15 @@ setup: ## Generate SSH keys and build all Docker images
 		 else \
 		   echo 'SSH keys already exist — skipping.'; \
 		 fi"
-	@echo "==> Building Docker images..."
 	docker compose build
 
 # ─── Docker lifecycle ─────────────────────────────────────────────────────────
 
 up: ## Start managed node containers
 	docker compose up -d app-server-01 app-server-02 db1
-	@echo "==> Waiting for SSH to be ready..."
-	@sleep 3
-	@docker compose ps
+	docker compose run --rm ansible-control \
+		bash -c "sleep 3 && echo '==> Containers ready.'"
+	docker compose ps
 
 down: ## Stop and remove all containers
 	docker compose down
@@ -79,14 +78,22 @@ check-prod: ## Dry-run setup against production
 	$(ANSIBLE) ansible-playbook -i $(PROD_INV) $(PLAYBOOKS)/setup.yml --check --diff \
 		-e "ansible_user=$$SSH_USER"
 
-# ─── Shell access ─────────────────────────────────────────────────────────────
+# ─── Shell / SSH access ───────────────────────────────────────────────────────
 
-shell: ## Open a shell inside the Ansible control node
+shell: ## Open a bash shell inside the Ansible control node
 	$(ANSIBLE) bash
+
+ssh-server-01: ## SSH into app-server-01 (via control container)
+	$(SSH_CONTROL) ansible@app-server-01
+
+ssh-server-02: ## SSH into app-server-02 (via control container)
+	$(SSH_CONTROL) ansible@app-server-02
+
+ssh-db1: ## SSH into db1 (via control container)
+	$(SSH_CONTROL) ansible@db1
 
 # ─── Cleanup ──────────────────────────────────────────────────────────────────
 
 clean: down ## Remove all containers and generated SSH keys
-	@echo "==> Removing SSH keys..."
-	rm -rf ssh_keys/
-	@echo "==> Done."
+	docker run --rm -v "$(CURDIR)/ssh_keys:/ssh_keys" alpine \
+		sh -c "rm -rf /ssh_keys/*"
